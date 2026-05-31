@@ -12,7 +12,7 @@ object RetrofitClient {
 
     // ⚠️ После деплоя на Railway — замени этот URL на свой!
     // Пример: "https://sotar-play-server-production.up.railway.app/"
-    const val BASE_URL = "https://YOUR-SERVER.up.railway.app/"
+    const val BASE_URL = "https://sotar-server-production.up.railway.app/"
 
     private val moshi = Moshi.Builder()
         .addLast(KotlinJsonAdapterFactory())
