@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Папка кэша приложения — сюда сохраняем скачанные APK -->
+    <cache-path name="apk_cache" path="." />
+    <!-- Внешний кэш -->
+    <external-cache-path name="apk_external_cache" path="." />
+</paths>
