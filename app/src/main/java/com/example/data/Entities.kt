@@ -29,7 +29,8 @@ data class AppEntity(
     val installStatus: String = "NOT_INSTALLED", // "NOT_INSTALLED", "DOWNLOADING", "INSTALLING", "INSTALLED"
     val downloadProgress: Int = 0,
     val ratingSum: Double = 0.0,
-    val ratingCount: Int = 0
+    val ratingCount: Int = 0,
+    val apkUrl: String? = null  // URL для скачивания APK с сервера
 ) : Serializable {
     fun getAverageRating(): Double {
         return if (ratingCount > 0) ratingSum / ratingCount else 0.0
