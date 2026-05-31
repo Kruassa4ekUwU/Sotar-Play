@@ -1,9 +1,9 @@
 package com.example.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.AppDatabase
 import com.example.data.AppEntity
 import com.example.data.AppRepository
 import com.example.data.Developer
@@ -32,17 +32,15 @@ sealed interface DevProfileUiState {
 }
 
 class SotarkPlayViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository: AppRepository
+    private val repository = AppRepository(application)
 
     init {
-        val db = AppDatabase.getDatabase(application)
-        repository = AppRepository(db)
         viewModelScope.launch {
-            repository.seedDatabaseIfEmpty()
+            repository.seedDatabaseIfEmpty() // загружает с сервера
         }
     }
 
-    // Main App Browsing States
+    // Search & Category
     private val _searchQuery = MutableStateFlow("")
     val searchQuery = _searchQuery.asStateFlow()
 
@@ -53,89 +51,34 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
     val appsList: StateFlow<List<AppEntity>> = combine(
         _searchQuery,
         _selectedCategory
-    ) { query, category ->
-        Pair(query, category)
-    }.flatMapLatest { (query, category) ->
-        if (query.isNotEmpty()) {
-            repository.searchApps(query)
-        } else if (category != "Все") {
-            repository.getAppsByCategory(category)
-        } else {
-            repository.allApps
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    ) { query, category -> Pair(query, category) }
+    .flatMapLatest { (query, category) ->
+        if (query.isNotEmpty()) repository.searchApps(query)
+        else if (category != "Все") repository.getAppsByCategory(category)
+        else repository.allApps
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // App Detail States
+    // Detail
     private val _currentAppId = MutableStateFlow<Long?>(null)
     val currentAppId = _currentAppId.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val appDetailState: StateFlow<DetailUiState> = _currentAppId.flatMapLatest { appId ->
-        if (appId == null) {
-            MutableStateFlow(DetailUiState.Loading)
-        } else {
-            combine(
-                repository.getAppById(appId),
-                repository.getReviewsForApp(appId)
-            ) { app, reviews ->
-                if (app != null) {
-                    val developer = repository.getDeveloperById(app.developerId)
-                    DetailUiState.Success(app, reviews, developer)
-                } else {
-                    DetailUiState.Error("Приложение не найдено")
-                }
-            }
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DetailUiState.Loading
-    )
+    private val _detailState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
+    val appDetailState: StateFlow<DetailUiState> = _detailState.asStateFlow()
 
-    // Developer Profile States
-    private val _currentDeveloperId = MutableStateFlow<Long?>(null)
-    val currentDeveloperId = _currentDeveloperId.asStateFlow()
+    // Developer profile
+    private val _devProfileState = MutableStateFlow<DevProfileUiState>(DevProfileUiState.Loading)
+    val developerProfileState: StateFlow<DevProfileUiState> = _devProfileState.asStateFlow()
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val developerProfileState: StateFlow<DevProfileUiState> = _currentDeveloperId.flatMapLatest { devId ->
-        if (devId == null) {
-            MutableStateFlow(DevProfileUiState.Loading)
-        } else {
-            val devFlow = MutableStateFlow<Developer?>(null)
-            viewModelScope.launch {
-                devFlow.value = repository.getDeveloperById(devId)
-            }
-            combine(
-                devFlow,
-                repository.getAppsByDeveloper(devId)
-            ) { developer, apps ->
-                if (developer != null) {
-                    DevProfileUiState.Success(developer, apps)
-                } else {
-                    DevProfileUiState.Error("Разработчик не найден")
-                }
-            }
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = DevProfileUiState.Loading
-    )
-
-    // Simulated "Active Running App" State
+    // Running app simulation
     private val _runningApp = MutableStateFlow<AppEntity?>(null)
     val runningApp = _runningApp.asStateFlow()
 
-    // Interactive States for "Running Apps"
     private val _clickerCount = MutableStateFlow(0)
     val clickerCount = _clickerCount.asStateFlow()
 
     private val _weatherWindSpeed = MutableStateFlow(5.4)
     val weatherWindSpeed = _weatherWindSpeed.asStateFlow()
+
     private val _weatherPhaseText = MutableStateFlow("Новолуние")
     val weatherPhaseText = _weatherPhaseText.asStateFlow()
 
@@ -150,24 +93,60 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
     )
     val chatMessages = _chatMessages.asStateFlow()
 
-    // Search & Category Setters
+    // Publish state
+    private val _publishLoading = MutableStateFlow(false)
+    val publishLoading = _publishLoading.asStateFlow()
+
+    private val _publishError = MutableStateFlow<String?>(null)
+    val publishError = _publishError.asStateFlow()
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
+        viewModelScope.launch {
+            repository.refreshApps(
+                category = _selectedCategory.value.takeIf { it != "Все" },
+                search = query.takeIf { it.isNotEmpty() }
+            )
+        }
     }
 
     fun setCategory(category: String) {
         _selectedCategory.value = category
+        viewModelScope.launch {
+            repository.refreshApps(category = category.takeIf { it != "Все" })
+        }
     }
 
     fun loadAppDetail(appId: Long) {
         _currentAppId.value = appId
+        _detailState.value = DetailUiState.Loading
+        viewModelScope.launch {
+            repository.getAppById(appId).collect { app ->
+                if (app != null) {
+                    val reviews = repository.getReviewsOnce(appId)
+                    val developer = repository.getDeveloperById(app.developerId)
+                    _detailState.value = DetailUiState.Success(app, reviews, developer)
+                } else {
+                    _detailState.value = DetailUiState.Error("Приложение не найдено")
+                }
+            }
+        }
     }
 
     fun loadDeveloperProfile(devId: Long) {
-        _currentDeveloperId.value = devId
+        _devProfileState.value = DevProfileUiState.Loading
+        viewModelScope.launch {
+            val dev = repository.getDeveloperById(devId)
+            if (dev != null) {
+                repository.getAppsByDeveloper(devId).collect { apps ->
+                    _devProfileState.value = DevProfileUiState.Success(dev, apps)
+                }
+            } else {
+                _devProfileState.value = DevProfileUiState.Error("Разработчик не найден")
+            }
+        }
     }
 
-    // Installations Actions
     fun installApp(appId: Long) {
         viewModelScope.launch {
             repository.installApp(appId)
@@ -180,14 +159,14 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    // Submit user review
     fun submitReview(appId: Long, name: String, email: String, text: String, rating: Int) {
         viewModelScope.launch {
             repository.addReview(appId, name, email, text, rating)
+            loadAppDetail(appId) // обновить отзывы
         }
     }
 
-    // Upload/Publish Dynamic Application
+    // Публикация с APK файлом
     fun publishNewApp(
         title: String,
         description: String,
@@ -199,29 +178,46 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
         developerBio: String,
         accentColorHex: String,
         symbolName: String,
-        onSuccess: () -> Unit
+        apkUri: Uri? = null,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit = {}
     ) {
         viewModelScope.launch {
-            repository.publishApp(
-                title = title,
-                description = description,
-                category = category,
-                sizeMb = sizeMb,
-                version = version,
-                developerName = developerName,
-                developerEmail = developerEmail,
-                developerBio = developerBio,
-                iconAccentColorHex = accentColorHex,
-                iconSymbol = symbolName
-            )
-            onSuccess()
+            _publishLoading.value = true
+            _publishError.value = null
+            try {
+                val appId = repository.publishApp(
+                    title = title,
+                    description = description,
+                    category = category,
+                    sizeMb = sizeMb,
+                    version = version,
+                    developerName = developerName,
+                    developerEmail = developerEmail,
+                    developerBio = developerBio,
+                    iconAccentColorHex = accentColorHex,
+                    iconSymbol = symbolName,
+                    apkUri = apkUri
+                )
+                if (appId >= 0) {
+                    onSuccess()
+                } else {
+                    val msg = "Не удалось опубликовать. Проверь подключение к серверу."
+                    _publishError.value = msg
+                    onError(msg)
+                }
+            } catch (e: Exception) {
+                val msg = "Ошибка: ${e.message}"
+                _publishError.value = msg
+                onError(msg)
+            } finally {
+                _publishLoading.value = false
+            }
         }
     }
 
-    // Running App Simulations Management
     fun openRunningApp(app: AppEntity) {
         _runningApp.value = app
-        // Reset interactive simulation states on launch
         _clickerCount.value = 0
         _weatherWindSpeed.value = (3..18).random() + (0..9).random() / 10.0
         val phases = listOf("Новолуние", "Растущая Луна", "Полнолуние", "Убывающая Луна")
@@ -233,14 +229,9 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
         )
     }
 
-    fun closeRunningApp() {
-        _runningApp.value = null
-    }
+    fun closeRunningApp() { _runningApp.value = null }
 
-    // Mini Apps Interaction Methods
-    fun tapClicker() {
-        _clickerCount.value += 1
-    }
+    fun tapClicker() { _clickerCount.value += 1 }
 
     fun measureWeather() {
         _weatherWindSpeed.value = (2..25).random() + (0..9).random() / 10.0
@@ -251,24 +242,17 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
     fun sendChatMessage(msg: String) {
         if (msg.trim().isEmpty()) return
         val current = _chatMessages.value.toMutableList()
-        current.add(msg to true) // user message
+        current.add(msg to true)
         _chatMessages.value = current
-
-        // AI/Bot Answer simulator
         viewModelScope.launch {
             delay(1000)
             val botAnswers = listOf(
-                "Ого, крутая мысль!",
-                "Я зашифровал это сообщение в блокчейн.",
-                "Полностью согласен с тобой, друг.",
-                "ChatSphere работает без цензуры по всему космосу!",
-                "Ха-ха! Отличный юмор.",
-                "Спасибо за ответ!",
-                "Тут так круто, рад пообщаться."
+                "Ого, крутая мысль!", "Я зашифровал это сообщение в блокчейн.",
+                "Полностью согласен!", "ChatSphere работает без цензуры по всему космосу!",
+                "Ха-ха! Отличный юмор.", "Спасибо за ответ!", "Тут так круто, рад пообщаться."
             )
-            val reply = botAnswers.random()
             val final = _chatMessages.value.toMutableList()
-            final.add(reply to false)
+            final.add(botAnswers.random() to false)
             _chatMessages.value = final
         }
     }
@@ -279,7 +263,5 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
         _paintPaths.value = current
     }
 
-    fun clearPaintCanvas() {
-        _paintPaths.value = emptyList()
-    }
+    fun clearPaintCanvas() { _paintPaths.value = emptyList() }
 }
