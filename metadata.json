@@ -1,0 +1,6 @@
+{
+  "name": "Sotark Play",
+  "description": "Sotark Play is an open app store where users can browse, review, and publish Android apps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

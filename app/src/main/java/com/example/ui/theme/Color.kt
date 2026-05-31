@@ -1,0 +1,33 @@
+package com.example.ui.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Light Theme (Sky Blue & White)
+val LightPrimary = Color(0xFF1E88E5)
+val LightOnPrimary = Color(0xFFFFFFFF)
+val LightPrimaryContainer = Color(0xFFE3F2FD)
+val LightOnPrimaryContainer = Color(0xFF0D47A1)
+val LightSecondary = Color(0xFF42A5F5)
+val LightOnSecondary = Color(0xFFFFFFFF)
+val LightBackground = Color(0xFFF5F9FC)
+val LightOnBackground = Color(0xFF101A24)
+val LightSurface = Color(0xFFFFFFFF)
+val LightOnSurface = Color(0xFF1A212E)
+val LightSurfaceVariant = Color(0xFFEBF3F9)
+val LightOnSurfaceVariant = Color(0xFF5F6E7D)
+val LightOutline = Color(0xFFB0C4DE)
+
+// Dark Theme (Vibrant Orange & Pitch Black)
+val DarkPrimary = Color(0xFFFF7214)
+val DarkOnPrimary = Color(0xFF000000)
+val DarkPrimaryContainer = Color(0xFF3B1E0A)
+val DarkOnPrimaryContainer = Color(0xFFFFDBCF)
+val DarkSecondary = Color(0xFFFF9E66)
+val DarkOnSecondary = Color(0xFF3D2416)
+val DarkBackground = Color(0xFF080808)
+val DarkOnBackground = Color(0xFFF5F5F5)
+val DarkSurface = Color(0xFF1A1A1A)
+val DarkOnSurface = Color(0xFFE0E0E0)
+val DarkSurfaceVariant = Color(0xFF262626)
+val DarkOnSurfaceVariant = Color(0xFFB0B0B0)
+val DarkOutline = Color(0xFF5C5C5C)
