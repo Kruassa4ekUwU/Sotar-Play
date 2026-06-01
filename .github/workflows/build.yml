@@ -3,7 +3,7 @@ name: Build APK
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # позволяет запускать вручную
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,11 +26,10 @@ jobs:
         run: |
           echo "${{ secrets.DEBUG_KEYSTORE }}" | base64 -d > debug.keystore
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
