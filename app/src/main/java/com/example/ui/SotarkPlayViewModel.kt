@@ -265,3 +265,46 @@ class SotarkPlayViewModel(application: Application) : AndroidViewModel(applicati
 
     fun clearPaintCanvas() { _paintPaths.value = emptyList() }
 }
+
+    // ── User Profile ──────────────────────────────────────
+    private val _userProfile = MutableStateFlow(com.example.data.UserProfile())
+    val userProfile: StateFlow<com.example.data.UserProfile> = _userProfile.asStateFlow()
+
+    fun loadUserProfile() {
+        _userProfile.value = com.example.data.UserProfileManager.load(getApplication())
+    }
+
+    fun saveUserProfile(name: String, email: String, bio: String, avatarUri: android.net.Uri? = null) {
+        val current = _userProfile.value
+        val newProfile = current.copy(
+            name = name,
+            email = email,
+            bio = bio,
+            avatarUri = avatarUri?.toString() ?: current.avatarUri
+        )
+        com.example.data.UserProfileManager.save(getApplication(), newProfile)
+        _userProfile.value = newProfile
+    }
+
+    fun isAppAuthor(app: com.example.data.AppEntity): Boolean {
+        val profile = _userProfile.value
+        return profile.email.isNotEmpty() && profile.email == app.developerName.let {
+            // Check by developer email match
+            profile.email
+        } && app.developerName == profile.name
+    }
+
+    fun deleteAppIfAuthor(appId: Long, onSuccess: () -> Unit, onError: () -> Unit) {
+        val app = (appDetailState.value as? DetailUiState.Success)?.app ?: run {
+            onError(); return
+        }
+        val profile = _userProfile.value
+        if (app.developerName == profile.name) {
+            viewModelScope.launch {
+                repository.deleteApp(appId)
+                onSuccess()
+            }
+        } else {
+            onError()
+        }
+    }
